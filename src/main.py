@@ -1,11 +1,13 @@
+# src/main.py
+
 import os, cv2, numpy as np, torch
 from tqdm import tqdm
 from ultralytics import YOLO
 from rembg import remove
-
 from model_configs import MODEL_CONFIGS
-from evaluate import evaluate_batch  # Changed from evaluate_output
+from evaluate import evaluate_batch  
 from utils import ensure_dir, load_images, save_image
+from torchvision.models.segmentation import deeplabv3_resnet101, DeepLabV3_ResNet101_Weights
 
 INPUT_DIR = "sample_input"
 OUTPUT_DIR = "sample_output"
@@ -13,9 +15,7 @@ ensure_dir(OUTPUT_DIR)
 
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 
-# Cache for loaded models to avoid reloading
 MODEL_CACHE = {}
-
 
 def keep_largest_component(img):
     """Keep only the largest connected component in the image."""
@@ -29,7 +29,6 @@ def keep_largest_component(img):
     largest_label = 1 + np.argmax(stats[1:, 4])  # skip background
     keep_mask = (labels == largest_label).astype(np.uint8) * 255
     return cv2.bitwise_and(img, img, mask=keep_mask)
-
 
 def process_yolo(cfg, img):
     """Process image with YOLO segmentation model."""
@@ -70,7 +69,6 @@ def process_yolo(cfg, img):
     black_bg = keep_largest_component(black_bg)
     return black_bg
 
-
 def process_rembg(cfg, img):
     """Process image with rembg (U2Net/ISNet) model."""
     try:
@@ -101,8 +99,6 @@ def process_rembg(cfg, img):
     except Exception as e:
         print(f"    Error in rembg processing: {e}")
         return None
-
-from torchvision.models.segmentation import deeplabv3_resnet101, DeepLabV3_ResNet101_Weights
 
 def process_deeplab(cfg, img):
     """Process image with DeepLabv3 model."""
@@ -137,7 +133,6 @@ PROCESSORS = {
     "rembg": process_rembg,
     "deeplab": process_deeplab
 }
-
 
 def main():
     """Main processing pipeline."""
@@ -211,17 +206,7 @@ def main():
         
         print(f"\nSaved best result: {os.path.basename(out_path)}")
         
-        # Optional: Save all results for comparison
-        if len(valid_results) > 1:
-            save_all = input("\n💡 Save all model outputs for comparison? (y/n): ").lower()
-            if save_all == 'y':
-                for model_name, output in valid_results.items():
-                    model_out_path = os.path.join(
-                        OUTPUT_DIR, 
-                        f"{base_name}_{model_name}_score{scores[model_name]:.3f}.png"
-                    )
-                    save_image(model_out_path, output)
-                print(f"✓ Saved all {len(valid_results)} outputs to '{OUTPUT_DIR}'")
+        
 
     print("\n" + "="*70)
     print("ALL PROCESSING COMPLETE!")

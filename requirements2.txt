@@ -1,5 +1,1 @@
-opencv-python
-numpy
-matplotlib
-tqdm
-opencv-contrib-python
+

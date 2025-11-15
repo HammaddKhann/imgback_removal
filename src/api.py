@@ -1,32 +1,47 @@
+# src/api.py
+
+import os
+import cv2
 import numpy as np
 import torch
-from fastapi import FastAPI, File, UploadFile, HTTPException
-from fastapi.responses import HTMLResponse, StreamingResponse
-from fastapi.staticfiles import StaticFiles
 import base64
-from PIL import Image
+from fastapi import FastAPI, File, UploadFile, HTTPException
+from fastapi.responses import HTMLResponse
+from fastapi.middleware.cors import CORSMiddleware
 from ultralytics import YOLO
-from rembg import remove
-from model_configs import MODEL_CONFIGS
-from evaluate import evaluate_output
-import os, cv2, numpy as np, torch, matplotlib.pyplot as plt
-from tqdm import tqdm
-from ultralytics import YOLO
-from rembg import remove
-import torchvision
-from model_configs import MODEL_CONFIGS
-from evaluate import evaluate_output
-from utils import ensure_dir, load_images, save_image
+from rembg import remove, new_session
+from torchvision.models.segmentation import deeplabv3_resnet101, DeepLabV3_ResNet101_Weights
 
-app = FastAPI(title="Background Removal API")
+from model_configs import MODEL_CONFIGS
+from evaluate import evaluate_batch  # Changed to use evaluate_batch
+
+app = FastAPI(
+    title="Background Removal API",
+    description="AI-powered background removal using multiple models",
+    version="1.0.0"
+)
+
+# Add CORS middleware
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
-print(f"Using device: {DEVICE}")
+print(f"🚀 Starting API server on device: {DEVICE}")
 
+# Cache for loaded models
 MODEL_CACHE = {}
 
 
 def keep_largest_component(img):
+    """Keep only the largest connected component in the image."""
+    if img is None:
+        return None
+        
     gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
     _, bin_mask = cv2.threshold(gray, 5, 255, cv2.THRESH_BINARY)
     num_labels, labels, stats, _ = cv2.connectedComponentsWithStats(bin_mask, connectivity=8)
@@ -40,67 +55,115 @@ def keep_largest_component(img):
 
 
 def process_yolo(cfg, img):
-    model_key = cfg["weights"]
-    if model_key not in MODEL_CACHE:
-        MODEL_CACHE[model_key] = YOLO(cfg["weights"])
-    model = MODEL_CACHE[model_key]
-    
-    preds = model.predict(
-        source=img,
-        imgsz=cfg["imgsz"],
-        conf=cfg["conf"],
-        iou=cfg["iou"],
-        device=DEVICE,
-        retina_masks=True,
-        verbose=False
-    )
+    """Process image with YOLO segmentation model."""
+    try:
+        model_key = cfg["weights"]
+        if model_key not in MODEL_CACHE:
+            print(f"Loading {model_key}...")
+            MODEL_CACHE[model_key] = YOLO(cfg["weights"])
+        model = MODEL_CACHE[model_key]
+        
+        preds = model.predict(
+            source=img,
+            imgsz=cfg["imgsz"],
+            conf=cfg["conf"],
+            iou=cfg["iou"],
+            device=DEVICE,
+            retina_masks=True,
+            verbose=False
+        )
 
-    H, W = img.shape[:2]
-    black_bg = np.zeros_like(img)
-    kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (7, 7))
+        H, W = img.shape[:2]
+        black_bg = np.zeros_like(img)
+        kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (7, 7))
 
-    for r in preds:
-        if r.masks is None:
-            continue
-        for m in r.masks.data.cpu().numpy():
-            m = cv2.resize(m, (W, H))
-            m = (m > 0.5).astype(np.uint8) * 255
-            m = cv2.morphologyEx(m, cv2.MORPH_CLOSE, kernel, iterations=4)
-            m = cv2.dilate(m, kernel, iterations=1)
-            if cv2.countNonZero(m) < 800:
+        for r in preds:
+            if r.masks is None:
                 continue
-            obj = cv2.bitwise_and(img, img, mask=m)
-            black_bg = cv2.bitwise_or(black_bg, obj)
+            for m in r.masks.data.cpu().numpy():
+                m = cv2.resize(m, (W, H))
+                m = (m > 0.5).astype(np.uint8) * 255
+                m = cv2.morphologyEx(m, cv2.MORPH_CLOSE, kernel, iterations=4)
+                m = cv2.dilate(m, kernel, iterations=1)
+                if cv2.countNonZero(m) < 800:
+                    continue
+                obj = cv2.bitwise_and(img, img, mask=m)
+                black_bg = cv2.bitwise_or(black_bg, obj)
 
-    black_bg = keep_largest_component(black_bg)
-    return black_bg
+        black_bg = keep_largest_component(black_bg)
+        return black_bg
+    except Exception as e:
+        print(f"YOLO Error: {e}")
+        return None
 
 
-def process_rembg(_, img):
-    result_bytes = remove(img)
-    nparr = np.frombuffer(result_bytes, np.uint8)
-    output = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
-    return keep_largest_component(output)
+def process_rembg(cfg, img):
+    """Process image with rembg (U2Net/ISNet) model."""
+    try:
+        # Get model name from config
+        model_name = cfg.get("model_name", "u2net")
+        
+        # Convert image to bytes for rembg
+        success, img_encoded = cv2.imencode('.png', img)
+        if not success:
+            print(f"Failed to encode image")
+            return None
+            
+        img_bytes = img_encoded.tobytes()
+        
+        # Create session and remove background
+        session = new_session(model_name)
+        result_bytes = remove(img_bytes, session=session)
+        
+        # Check if we got valid output
+        if not result_bytes or len(result_bytes) == 0:
+            print(f"Rembg returned empty result")
+            return None
+        
+        # Convert back to image
+        nparr = np.frombuffer(result_bytes, np.uint8)
+        output = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+        
+        # Verify decode was successful
+        if output is None or output.size == 0:
+            print(f"Failed to decode rembg output")
+            return None
+            
+        return keep_largest_component(output)
+        
+    except Exception as e:
+        print(f"Rembg error: {e}")
+        return None
 
 
-def process_deeplab(_, img):
-    if "deeplab" not in MODEL_CACHE:
-        MODEL_CACHE["deeplab"] = torch.hub.load(
-            "pytorch/vision", "deeplabv3_resnet101", pretrained=True
-        ).to(DEVICE)
-        MODEL_CACHE["deeplab"].eval()
-    
-    model = MODEL_CACHE["deeplab"]
-    img_rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
-    tensor = torch.from_numpy(img_rgb).float().permute(2, 0, 1).unsqueeze(0) / 255.0
-    tensor = tensor.to(DEVICE)
-    
-    with torch.no_grad():
-        out = model(tensor)["out"]
-    
-    mask = out.argmax(1).squeeze().cpu().numpy().astype(np.uint8) * 255
-    result = cv2.bitwise_and(img, img, mask=mask)
-    return keep_largest_component(result)
+def process_deeplab(cfg, img):
+    """Process image with DeepLabv3 model."""
+    try:
+        if "deeplab" not in MODEL_CACHE:
+            print("  Loading DeepLabv3...")
+
+            weights = DeepLabV3_ResNet101_Weights.DEFAULT
+            MODEL_CACHE["deeplab"] = deeplabv3_resnet101(
+                weights=weights
+            ).to(DEVICE)
+
+            MODEL_CACHE["deeplab"].eval()
+        
+        model = MODEL_CACHE["deeplab"]
+        img_rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+        tensor = torch.from_numpy(img_rgb).float().permute(2, 0, 1).unsqueeze(0) / 255.0
+        tensor = tensor.to(DEVICE)
+        
+        with torch.no_grad():
+            out = model(tensor)["out"]
+        
+        mask = out.argmax(1).squeeze().cpu().numpy().astype(np.uint8) * 255
+        result = cv2.bitwise_and(img, img, mask=mask)
+        return keep_largest_component(result)
+    except Exception as e:
+        print(f"  DeepLab Error: {e}")
+        return None
+
 
 
 PROCESSORS = {
@@ -360,33 +423,61 @@ async def home():
     return HTMLResponse(content=html_content)
 
 
+@app.get("/health")
+async def health_check():
+    """Health check endpoint"""
+    return {
+        "status": "healthy",
+        "device": DEVICE,
+        "models_loaded": len(MODEL_CACHE),
+        "available_models": list(MODEL_CONFIGS.keys())
+    }
+
+
 @app.post("/process")
 async def process_image(file: UploadFile = File(...)):
     """Process uploaded image with all models and return the best result"""
     try:
+        # Validate file type
+        if not file.content_type.startswith('image/'):
+            raise HTTPException(status_code=400, detail="File must be an image")
+        
         # Read uploaded file
         contents = await file.read()
+        
+        # Validate file size (10MB limit)
+        if len(contents) > 10 * 1024 * 1024:
+            raise HTTPException(status_code=400, detail="File size must be less than 10MB")
+        
         img = read_image_file(contents)
+        print(f"Processing image: {file.filename}, shape: {img.shape}")
         
         # Process with all models
         results = {}
         for model_name, cfg in MODEL_CONFIGS.items():
             try:
+                print(f"Processing with {model_name}...")
                 func = PROCESSORS[cfg["type"]]
                 output = func(cfg, img)
                 results[model_name] = output
             except Exception as e:
                 print(f"{model_name} failed: {e}")
+                results[model_name] = None
         
-        # Evaluate all results
-        scores = {m: evaluate_output(o) for m, o in results.items() if o is not None}
+        # Filter valid results
+        valid_results = {m: o for m, o in results.items() if o is not None}
         
-        if not scores:
-            raise HTTPException(status_code=500, detail="No valid outputs generated")
+        if not valid_results:
+            raise HTTPException(status_code=500, detail="No valid outputs generated from any model")
+        
+        # Evaluate all results using enhanced evaluation
+        scores = evaluate_batch(valid_results, debug=False)  # debug=False for API
         
         # Get best model
         best_model = max(scores, key=scores.get)
         best_img = results[best_model]
+        
+        print(f"Best model: {best_model} with score: {scores[best_model]:.4f}")
         
         # Convert images to base64 for display
         original_base64 = numpy_to_base64(img)
@@ -397,20 +488,18 @@ async def process_image(file: UploadFile = File(...)):
             "processed_image": processed_base64,
             "best_model": best_model,
             "scores": scores,
-            "message": f"Successfully processed with {len(results)} models"
+            "message": f"Successfully processed with {len(valid_results)} models. Best result from {best_model}."
         }
         
+    except HTTPException:
+        raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@app.get("/download/{filename}")
-async def download_image(filename: str):
-    """Download processed image"""
-    # This endpoint can be used for direct downloads if needed
-    pass
+        print(f"Error processing image: {e}")
+        raise HTTPException(status_code=500, detail=f"Error processing image: {str(e)}")
 
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    port = int(os.environ.get("PORT", 8000))
+    print(f"🚀 Starting server on port {port}")
+    uvicorn.run(app, host="0.0.0.0", port=port)

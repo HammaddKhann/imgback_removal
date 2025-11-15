@@ -2,24 +2,6 @@ import cv2
 import numpy as np
 
 def evaluate_output(output, min_area_ratio=0.02, debug=False):
-    """
-    Enhanced evaluation with multiple quality metrics.
-    
-    Returns a score between 0 and 1 based on:
-    1. Size score (25%) - object should be substantial but not overwhelming
-    2. Edge quality (25%) - smooth, clean edges
-    3. Completeness (20%) - background properly removed
-    4. Preservation (15%) - foreground intact without holes
-    5. Sharpness (15%) - clear, focused foreground
-    
-    Args:
-        output: BGR image on black background
-        min_area_ratio: minimum % of image that must be foreground
-        debug: if True, prints individual scores
-    
-    Returns:
-        float: score between 0.0 and 1.0
-    """
     
     if output is None or not isinstance(output, np.ndarray) or output.size == 0:
         return 0.0
@@ -138,8 +120,8 @@ def evaluate_output(output, min_area_ratio=0.02, debug=False):
     # ============================================
     final_score = (
         0.25 * size_score +
-        0.25 * edge_score +
-        0.20 * completeness_score +
+        0.20 * edge_score +
+        0.25 * completeness_score +
         0.15 * preservation_score +
         0.15 * sharpness_score
     )

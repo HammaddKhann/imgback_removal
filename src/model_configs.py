@@ -56,5 +56,10 @@ POST_PROCESS_CONFIGS = {
         "morph_kernel_size": 5,
         "morph_iterations": 2,
         "dilation_iterations": 0
+    },
+    "deeplabv3": {
+        "morph_kernel_size": 5,
+        "morph_iterations": 2,
+        "dilation_iterations": 0
     }
 }

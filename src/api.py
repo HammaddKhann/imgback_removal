@@ -199,150 +199,192 @@ async def home():
         <title>Background Removal</title>
         <style>
             body {
-                font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-                max-width: 1400px;
-                margin: 0 auto;
-                padding: 20px;
-                background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-                min-height: 100vh;
+                font-family: 'Inter', 'Segoe UI', sans-serif;
+                background: #dbeafe;
+                padding: 40px;
+                margin: 0;
             }
+
             .container {
-                background: white;
-                border-radius: 15px;
-                padding: 30px;
-                box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+                max-width: 900px;
+                margin: 0 auto;
+                background: rgba(255, 255, 255, 0.85);
+                backdrop-filter: blur(12px);
+                border-radius: 18px;
+                padding: 40px;
+                box-shadow: 0 8px 30px rgba(0,0,0,0.08);
             }
+
             h1 {
-                color: #333;
                 text-align: center;
-                margin-bottom: 30px;
+                font-size: 32px;
+                font-weight: 700;
+                color: #1a1a1a;
+                margin-bottom: 35px;
+                letter-spacing: -0.5px;
             }
+
             .upload-section {
                 text-align: center;
-                margin-bottom: 30px;
+                margin-bottom: 35px;
             }
+
             #fileInput {
                 display: none;
             }
+
             .upload-btn {
-                background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                background: #4a6df0;
                 color: white;
-                padding: 15px 30px;
+                padding: 14px 32px;
                 border: none;
-                border-radius: 8px;
+                border-radius: 10px;
                 cursor: pointer;
                 font-size: 16px;
                 font-weight: 600;
-                transition: transform 0.2s;
+                transition: all 0.2s ease;
+                letter-spacing: 0.3px;
             }
+
             .upload-btn:hover {
+                background: #3f5cd6;
                 transform: translateY(-2px);
-                box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+                box-shadow: 0 6px 14px rgba(74,109,240,0.3);
             }
+
             #fileName {
-                margin-top: 10px;
-                color: #666;
+                margin-top: 12px;
+                font-size: 14px;
+                color: #6b7280;
                 font-style: italic;
             }
+
+            /* Modern Loader */
             .loader {
-                border: 5px solid #f3f3f3;
-                border-top: 5px solid #667eea;
+                width: 44px;
+                height: 44px;
+                border: 4px solid #e5e7eb;
+                border-top: 4px solid #4a6df0;
                 border-radius: 50%;
-                width: 50px;
-                height: 50px;
-                animation: spin 1s linear infinite;
-                margin: 20px auto;
+                animation: spin 0.8s linear infinite;
+                margin: 25px auto;
                 display: none;
             }
+
             @keyframes spin {
-                0% { transform: rotate(0deg); }
-                100% { transform: rotate(360deg); }
+                to { transform: rotate(360deg); }
             }
+
             .results {
                 display: none;
-                margin-top: 30px;
+                margin-top: 40px;
             }
+
             .image-comparison {
                 display: grid;
                 grid-template-columns: 1fr 1fr;
-                gap: 20px;
-                margin-bottom: 20px;
+                gap: 30px;
             }
+
             .image-box {
+                background: white;
+                padding: 20px;
+                border-radius: 12px;
+                box-shadow: 0 3px 12px rgba(0,0,0,0.06);
                 text-align: center;
             }
+
             .image-box h3 {
-                color: #333;
-                margin-bottom: 10px;
+                font-size: 18px;
+                font-weight: 600;
+                color: #1f2937;
+                margin-bottom: 12px;
             }
+
             .image-box img {
-                max-width: 100%;
-                border-radius: 8px;
-                box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+                width: 100%;
+                border-radius: 10px;
+                box-shadow: 0 3px 10px rgba(0,0,0,0.08);
             }
+
             .scores {
-                background: #f8f9fa;
-                padding: 20px;
-                border-radius: 8px;
-                margin-bottom: 20px;
+                background: #f9fafb;
+                padding: 24px;
+                border-radius: 12px;
+                margin-top: 30px;
+                box-shadow: 0 2px 8px rgba(0,0,0,0.05);
             }
+
             .scores h3 {
-                color: #333;
-                margin-bottom: 15px;
+                margin: 0 0 15px 0;
+                font-size: 20px;
+                color: #1f2937;
             }
+
             .score-item {
-                padding: 8px;
-                margin: 5px 0;
-                border-radius: 5px;
                 background: white;
+                padding: 10px 14px;
+                margin: 6px 0;
+                border-radius: 8px;
+                font-size: 15px;
+                color: #374151;
+                box-shadow: 0 2px 5px rgba(0,0,0,0.04);
             }
+
             .score-item.best {
-                background: #d4edda;
-                border: 2px solid #28a745;
+                background: #e7f8ed;
+                border: 2px solid #3fc06c;
+                color: #256b43;
                 font-weight: 600;
             }
+
             .download-btn {
-                background: #28a745;
+                background: #3fc06c;
                 color: white;
-                padding: 12px 25px;
-                border: none;
-                border-radius: 8px;
-                cursor: pointer;
+                padding: 14px 32px;
+                border-radius: 10px;
                 font-size: 16px;
                 font-weight: 600;
                 text-decoration: none;
                 display: inline-block;
-                transition: transform 0.2s;
+                margin-top: 25px;
+                transition: all 0.2s;
             }
+
             .download-btn:hover {
+                background: #34a85c;
                 transform: translateY(-2px);
-                box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+                box-shadow: 0 6px 14px rgba(52,168,92,0.3);
             }
+
             .error {
-                background: #f8d7da;
-                color: #721c24;
+                background: #fde8e8;
+                color: #b91c1c;
                 padding: 15px;
-                border-radius: 8px;
-                margin: 20px 0;
+                border-radius: 10px;
+                margin-top: 20px;
                 display: none;
+                font-size: 15px;
+                text-align: center;
             }
         </style>
     </head>
+
     <body>
         <div class="container">
             <h1>Background Removal</h1>
-            
+
             <div class="upload-section">
                 <input type="file" id="fileInput" accept="image/*">
                 <button class="upload-btn" onclick="document.getElementById('fileInput').click()">
-                    📁 Choose Image
+                    Choose Image
                 </button>
                 <div id="fileName"></div>
             </div>
-            
+
             <div class="loader" id="loader"></div>
             <div class="error" id="error"></div>
-            
+
             <div class="results" id="results">
                 <div class="image-comparison">
                     <div class="image-box">
@@ -354,12 +396,12 @@ async def home():
                         <img id="processedImg" src="">
                     </div>
                 </div>
-                
+
                 <div class="scores" id="scoresDiv"></div>
-                
+
                 <div style="text-align: center;">
                     <a class="download-btn" id="downloadBtn" download="processed_image.png">
-                        💾 Download Processed Image
+                        Download Processed Image
                     </a>
                 </div>
             </div>
@@ -371,45 +413,39 @@ async def home():
             const loader = document.getElementById('loader');
             const results = document.getElementById('results');
             const error = document.getElementById('error');
-            
+
             fileInput.addEventListener('change', async (e) => {
                 const file = e.target.files[0];
                 if (!file) return;
-                
+
                 fileName.textContent = `Selected: ${file.name}`;
-                
-                // Show loader
+
                 loader.style.display = 'block';
                 results.style.display = 'none';
                 error.style.display = 'none';
-                
-                // Create form data
+
                 const formData = new FormData();
                 formData.append('file', file);
-                
+
                 try {
-                    // Upload and process
                     const response = await fetch('/process', {
                         method: 'POST',
                         body: formData
                     });
-                    
+
                     if (!response.ok) {
                         throw new Error('Processing failed');
                     }
-                    
+
                     const data = await response.json();
-                    
-                    // Display results
+
                     document.getElementById('originalImg').src = data.original_image;
                     document.getElementById('processedImg').src = data.processed_image;
                     document.getElementById('downloadBtn').href = data.processed_image;
-                    
-                    
-                    // Show results
+
                     loader.style.display = 'none';
                     results.style.display = 'block';
-                    
+
                 } catch (err) {
                     loader.style.display = 'none';
                     error.textContent = `Error: ${err.message}`;
@@ -421,6 +457,7 @@ async def home():
     </html>
     """
     return HTMLResponse(content=html_content)
+
 
 
 @app.get("/health")
